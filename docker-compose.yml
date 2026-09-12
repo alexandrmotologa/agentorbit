@@ -1,0 +1,25 @@
+services:
+  agentorbit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agentorbit
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-mock_bot_token_change_me}
+      - DEMO_MODE=${DEMO_MODE:-true}
+      - LLM_PROVIDER=${LLM_PROVIDER:-mock}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - DATABASE_PATH=/data/agentorbit.db
+    volumes:
+      - agentorbit_data:/data
+
+volumes:
+  agentorbit_data:

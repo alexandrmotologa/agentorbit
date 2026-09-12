@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: |
+            server/package.json
+            web/package.json
+
+      - name: Install server dependencies
+        run: npm --prefix server ci
+
+      - name: Run server tests
+        run: npm --prefix server test
+
+      - name: Build server
+        run: npm --prefix server run build
+
+      - name: Install web dependencies
+        run: npm --prefix web ci
+
+      - name: Build web
+        run: npm --prefix web run build

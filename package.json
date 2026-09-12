@@ -1,0 +1,26 @@
+{
+  "name": "agentorbit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Autonomous AI agent execution cockpit and scheduler for Telegram & Telegram Mini Apps",
+  "scripts": {
+    "dev:server": "npm --prefix server run dev",
+    "dev:web": "npm --prefix web run dev",
+    "build": "npm --prefix web run build && npm --prefix server run build",
+    "test": "npm --prefix server test",
+    "start": "npm --prefix server start"
+  },
+  "keywords": [
+    "telegram-mini-app",
+    "autonomous-agent",
+    "react-loop",
+    "ai-agent",
+    "telegram-bot",
+    "scheduler",
+    "fastify",
+    "react19",
+    "sqlite"
+  ],
+  "author": "Alexandr Motologa",
+  "license": "MIT"
+}
