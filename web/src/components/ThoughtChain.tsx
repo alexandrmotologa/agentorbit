@@ -1,5 +1,19 @@
 import React, { useState } from 'react';
-import { Brain, Wrench, Eye, CheckCircle2, AlertTriangle, ShieldCheck, ChevronDown, ChevronRight } from 'lucide-react';
+import {
+  Brain,
+  Wrench,
+  Eye,
+  CheckCircle2,
+  AlertTriangle,
+  ShieldCheck,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Copy,
+  Check,
+  GitBranch,
+  FileText,
+} from 'lucide-react';
 import { AgentStep, PendingApproval } from '../hooks/useAgentStream';
 
 interface ThoughtChainProps {
@@ -7,8 +21,11 @@ interface ThoughtChainProps {
   status: 'idle' | 'running' | 'waiting_approval' | 'completed' | 'failed';
   pendingApproval: PendingApproval | null;
   finalAnswer: string | null;
+  taskPrompt?: string;
+  orbiter?: string;
   onApprove?: () => void;
   onDeny?: () => void;
+  onBranch?: (prompt: string, orbiter?: string) => void;
 }
 
 export const ThoughtChain: React.FC<ThoughtChainProps> = ({
@@ -16,10 +33,14 @@ export const ThoughtChain: React.FC<ThoughtChainProps> = ({
   status,
   pendingApproval,
   finalAnswer,
+  taskPrompt = '',
+  orbiter = 'scout',
   onApprove,
   onDeny,
+  onBranch,
 }) => {
   const [expandedParams, setExpandedParams] = useState<Record<number, boolean>>({});
+  const [copied, setCopied] = useState(false);
 
   const toggleParams = (idx: number) => {
     setExpandedParams((prev) => ({ ...prev, [idx]: !prev[idx] }));
@@ -182,14 +203,109 @@ export const ThoughtChain: React.FC<ThoughtChainProps> = ({
         </div>
       )}
 
-      {/* Final Answer Banner */}
+      {/* Final Answer Banner with 1-Click Export & Branching */}
       {finalAnswer && (
-        <div className="p-5 rounded-2xl border border-orbit-emerald/40 bg-gradient-to-br from-orbit-emerald/10 via-orbit-card to-orbit-emerald/5 backdrop-blur-md shadow-xl">
-          <div className="flex items-center gap-2 text-orbit-emerald font-semibold text-sm mb-2">
-            <CheckCircle2 className="w-5 h-5" />
-            <span>Mission Deliverable Finalized</span>
+        <div className="p-5 rounded-2xl border border-orbit-emerald/40 bg-gradient-to-br from-orbit-emerald/10 via-orbit-card to-orbit-emerald/5 backdrop-blur-md shadow-xl space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-orbit-emerald font-semibold text-sm">
+              <CheckCircle2 className="w-5 h-5" />
+              <span>Mission Deliverable Finalized</span>
+            </div>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-orbit-emerald/15 text-orbit-emerald border border-orbit-emerald/30">
+              {orbiter?.toUpperCase() || 'SCOUT'}
+            </span>
           </div>
-          <p className="text-sm text-slate-100 leading-relaxed font-sans">{finalAnswer}</p>
+
+          <p className="text-sm text-slate-100 leading-relaxed font-sans whitespace-pre-wrap">{finalAnswer}</p>
+
+          {/* Action Toolbar: Export Deliverable & Branch */}
+          <div className="pt-2 border-t border-orbit-border/80 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              {/* Copy Markdown */}
+              <button
+                type="button"
+                onClick={() => {
+                  const md = `# AgentOrbit Deliverable: ${taskPrompt || 'Task'}\n\n**Orbiter**: ${orbiter}\n**Date**: ${new Date().toISOString()}\n\n## Final Answer\n${finalAnswer}\n\n## Execution Steps\n${steps
+                    .map((s) => `- **[${s.type}]** ${s.thought || s.toolName || ''}`)
+                    .join('\n')}`;
+                  navigator.clipboard.writeText(md);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono transition-colors"
+                title="Copy Markdown report to clipboard"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-orbit-emerald" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+                <span>{copied ? 'Copied!' : 'Copy'}</span>
+              </button>
+
+              {/* Download .md file */}
+              <button
+                type="button"
+                onClick={() => {
+                  const md = `# AgentOrbit Deliverable: ${taskPrompt || 'Task'}\n\n**Orbiter**: ${orbiter}\n**Date**: ${new Date().toISOString()}\n\n## Final Deliverable\n${finalAnswer}\n\n## Execution Trace\n${steps
+                    .map(
+                      (s, i) =>
+                        `### Step ${i + 1}: ${s.type} ${s.toolName ? `(${s.toolName})` : ''}\n${s.thought ? `> ${s.thought}\n` : ''}${
+                          s.toolOutput ? `\`\`\`\n${s.toolOutput}\n\`\`\`\n` : ''
+                        }`
+                    )
+                    .join('\n')}`;
+                  const blob = new Blob([md], { type: 'text/markdown' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `agentorbit_deliverable_${Date.now()}.md`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono transition-colors"
+                title="Download as Markdown file"
+              >
+                <FileText className="w-3.5 h-3.5 text-orbit-cyan" />
+                <span>.md</span>
+              </button>
+
+              {/* Download JSON trace */}
+              <button
+                type="button"
+                onClick={() => {
+                  const data = {
+                    prompt: taskPrompt,
+                    orbiter,
+                    finalAnswer,
+                    steps,
+                    exportedAt: new Date().toISOString(),
+                  };
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `agentorbit_trace_${Date.now()}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono transition-colors"
+                title="Download complete JSON execution trace"
+              >
+                <Download className="w-3.5 h-3.5 text-orbit-violet" />
+                <span>JSON</span>
+              </button>
+            </div>
+
+            {/* Branch / Re-run Goal */}
+            {onBranch && (
+              <button
+                type="button"
+                onClick={() => onBranch(taskPrompt, orbiter)}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orbit-cyan/15 hover:bg-orbit-cyan/25 text-orbit-cyan border border-orbit-cyan/30 text-xs font-semibold transition-all active:scale-95"
+                title="Branch or re-run this goal with tweaked instructions"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+                <span>Branch / Re-run</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

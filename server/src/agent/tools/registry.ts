@@ -287,9 +287,94 @@ export const httpPostTool: AgentTool<{ url: string; payload: Record<string, any>
   },
 };
 
+/**
+ * web_search: Searches the web and extracts top ranked sources, titles, and snippets.
+ */
+export const webSearchTool: AgentTool<{ query: string; max_results?: number }> = {
+  name: 'web_search',
+  description: 'Searches the web for given keywords and returns top ranked links, titles, and snippets for real-time discovery.',
+  schema: z.object({
+    query: z.string().min(2).describe('The search keywords or question to look up'),
+    max_results: z.number().optional().default(5).describe('Maximum number of results to return (1-10)'),
+  }),
+  async execute({ query, max_results = 5 }) {
+    try {
+      const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+      const res = await fetch(searchUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        throw new Error(`DuckDuckGo returned HTTP ${res.status}`);
+      }
+
+      const html = await res.text();
+      const blocks = html.split(/class=\"result\s/);
+      const items: Array<{ title: string; url: string; snippet: string }> = [];
+
+      for (const b of blocks.slice(1)) {
+        if (items.length >= max_results) break;
+        const uddgMatch = b.match(/class=\"result__snippet\"[\s\S]*?uddg=([^&"\s]+)/);
+        const textSnippet = b.match(/class=\"result__snippet\"[^>]*>([\s\S]*?)<\/a>/);
+        const titleTag = b.match(/<h2[^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/);
+
+        if (uddgMatch && textSnippet) {
+          const rawUrl = decodeURIComponent(uddgMatch[1]);
+          const ssrfCheck = validateUrlForSsrf(rawUrl);
+          if (ssrfCheck.safe) {
+            items.push({
+              title: titleTag ? titleTag[1].replace(/<[^>]+>/g, '').trim() : 'Search Result',
+              url: rawUrl,
+              snippet: textSnippet[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(),
+            });
+          }
+        }
+      }
+
+      if (items.length === 0) {
+        // Fallback to Wikipedia search API
+        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
+        const wikiRes = await fetch(wikiUrl);
+        if (wikiRes.ok) {
+          const wikiData = (await wikiRes.json()) as any;
+          const searchList = wikiData?.query?.search || [];
+          for (const item of searchList.slice(0, max_results)) {
+            items.push({
+              title: item.title,
+              url: `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, '_'))}`,
+              snippet: item.snippet.replace(/<[^>]+>/g, '').replace(/&quot;/g, '"'),
+            });
+          }
+        }
+      }
+
+      if (items.length === 0) {
+        return `No public search results found for query "${query}".`;
+      }
+
+      const formatted = items
+        .map((it, idx) => `${idx + 1}. **${it.title}**\n   URL: ${it.url}\n   Snippet: ${it.snippet}`)
+        .join('\n\n');
+
+      return `Top search results for "${query}":\n\n${formatted}`;
+    } catch (err: any) {
+      return `Web search error for "${query}": ${err.message || String(err)}`;
+    }
+  },
+};
+
 export function createDefaultRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
   registry.register(webFetchTool);
+  registry.register(webSearchTool);
   registry.register(scheduleCronTool);
   registry.register(storeMemoryTool);
   registry.register(retrieveMemoryTool);

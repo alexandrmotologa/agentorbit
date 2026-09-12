@@ -170,4 +170,75 @@ describe('ReAct Engine Execution in DEMO_MODE', () => {
     expect(types).toContain('OBSERVATION');
     expect(types).toContain('FINAL_ANSWER');
   });
+
+  it('registers and validates web_search tool in registry', async () => {
+    const registry = createDefaultRegistry();
+    const searchTool = registry.get('web_search');
+    expect(searchTool).toBeDefined();
+
+    // Invalid parameters check
+    const badRes = await registry.execute('web_search', { query: 'a' }, { userId: 'u1', taskId: 't1' });
+    expect(badRes).toContain('Error: Invalid parameters');
+  });
+
+  it('synchronizes and queries memory via SQLite FTS5', async () => {
+    const registry = createDefaultRegistry();
+    const { searchMemoryFts } = await import('../src/db/database.js');
+    const context = { userId: 'pilot_fts', taskId: 't_fts' };
+
+    await registry.execute(
+      'store_memory',
+      { key: 'flight_special_deal', value: 'Chisinau to London Heathrow roundtrip $109' },
+      context
+    );
+
+    await registry.execute(
+      'store_memory',
+      { key: 'server_metric', value: 'API cluster latency is 85ms on eu-central' },
+      context
+    );
+
+    // Search with FTS5
+    const results = searchMemoryFts('pilot_fts', 'London');
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    expect(results[0].key).toBe('flight_special_deal');
+    expect(results[0].value).toContain('$109');
+
+    // Search for latency
+    const metricResults = searchMemoryFts('pilot_fts', 'latency');
+    expect(metricResults.length).toBeGreaterThanOrEqual(1);
+    expect(metricResults[0].key).toBe('server_metric');
+  });
+
+  it('executes task using Uptime Watchdog Orbiter persona', async () => {
+    const engine = new ReActEngine();
+    const registry = createDefaultRegistry();
+    const llmProvider = createLlmProvider(registry);
+    const db = getDatabase(TEST_DB_PATH);
+
+    const taskId = 'task_test_uptime';
+    const userId = 'pilot_test';
+    const prompt = 'Check website health and latency status';
+
+    db.prepare(`
+      INSERT INTO tasks (id, user_id, prompt, status, orbiter, created_at, updated_at)
+      VALUES (?, ?, ?, 'pending', 'uptime', ?, ?)
+    `).run(taskId, userId, prompt, Date.now(), Date.now());
+
+    const result = await engine.runTask({
+      taskId,
+      userId,
+      prompt,
+      orbiter: 'uptime',
+      registry,
+      llmProvider,
+    });
+
+    expect(result).toBeDefined();
+    expect(result).toContain('Uptime');
+
+    const taskRecord = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(taskId) as any;
+    expect(taskRecord.status).toBe('completed');
+    expect(taskRecord.orbiter).toBe('uptime');
+  });
 });

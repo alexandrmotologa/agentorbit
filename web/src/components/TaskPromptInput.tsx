@@ -1,15 +1,34 @@
-import React, { useState } from 'react';
-import { Send, Plane, Newspaper, Globe, ShieldAlert, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Send, Plane, Newspaper, Globe, ShieldAlert, Sparkles, Mic, MicOff } from 'lucide-react';
+import { OrbiterType, ORBITERS } from './OrbiterSelector';
 
 interface TaskPromptInputProps {
   onDispatch: (prompt: string) => void;
   disabled?: boolean;
+  orbiter?: OrbiterType;
+  initialPrompt?: string;
 }
 
-export const TaskPromptInput: React.FC<TaskPromptInputProps> = ({ onDispatch, disabled }) => {
-  const [prompt, setPrompt] = useState('');
+export const TaskPromptInput: React.FC<TaskPromptInputProps> = ({
+  onDispatch,
+  disabled,
+  orbiter = 'scout',
+  initialPrompt = '',
+}) => {
+  const [prompt, setPrompt] = useState(initialPrompt);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
-  const blueprints = [
+  useEffect(() => {
+    if (initialPrompt) {
+      setPrompt(initialPrompt);
+    }
+  }, [initialPrompt]);
+
+  // Find active orbiter info
+  const currentOrbiter = ORBITERS.find((o) => o.id === orbiter) || ORBITERS[0];
+
+  const defaultBlueprints = [
     {
       id: 'flight',
       label: 'Flight Price Watcher',
@@ -36,6 +55,69 @@ export const TaskPromptInput: React.FC<TaskPromptInputProps> = ({ onDispatch, di
     },
   ];
 
+  // Combine orbiter-specific blueprints with defaults
+  const activeBlueprints = currentOrbiter.blueprints.map((b, idx) => ({
+    id: `orb_${idx}`,
+    label: b.label,
+    icon: <Sparkles className="w-3.5 h-3.5 text-orbit-cyan" />,
+    text: b.prompt,
+  }));
+
+  const blueprints = [...activeBlueprints, ...defaultBlueprints.slice(0, 2)];
+
+  // Web Speech Voice Dictation handler
+  const toggleSpeechRecognition = () => {
+    if (isListening) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert('Voice dictation is not supported by your current browser. You can type your prompt directly.');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = navigator.language || 'en-US';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        if (transcript.trim()) {
+          setPrompt((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        }
+      };
+
+      recognition.onerror = () => {
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch {
+      setIsListening(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim() || disabled) return;
@@ -51,9 +133,17 @@ export const TaskPromptInput: React.FC<TaskPromptInputProps> = ({ onDispatch, di
     <div className="space-y-3">
       {/* Quick-Launch Blueprint Chips */}
       <div>
-        <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-2 font-medium">
-          <Sparkles className="w-3 h-3 text-orbit-cyan" />
-          <span>Action Blueprints:</span>
+        <div className="flex items-center justify-between text-xs text-slate-400 mb-2 font-medium">
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3 text-orbit-cyan" />
+            <span>Recommended Blueprints for {currentOrbiter.name}:</span>
+          </div>
+          {isListening && (
+            <span className="text-[11px] font-mono text-rose-400 animate-pulse flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+              Listening...
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {blueprints.map((bp) => (
@@ -70,24 +160,43 @@ export const TaskPromptInput: React.FC<TaskPromptInputProps> = ({ onDispatch, di
         </div>
       </div>
 
-      {/* Main Prompt Bar */}
+      {/* Main Prompt Bar with Voice-to-Task Dictation */}
       <form onSubmit={handleSubmit} className="relative flex items-center">
         <input
           type="text"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="State your goal (e.g., 'Track flight price drops', 'Scrape tech news')..."
+          placeholder={`State goal for ${currentOrbiter.name} (e.g., 'Discover deals', 'Track trends')...`}
           disabled={disabled}
-          className="w-full pl-4 pr-12 py-3.5 rounded-2xl bg-orbit-card/90 border border-orbit-border/90 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-orbit-cyan focus:ring-1 focus:ring-orbit-cyan shadow-xl transition-all font-sans"
+          className="w-full pl-4 pr-24 py-3.5 rounded-2xl bg-orbit-card/90 border border-orbit-border/90 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-orbit-cyan focus:ring-1 focus:ring-orbit-cyan shadow-xl transition-all font-sans"
         />
-        <button
-          type="submit"
-          disabled={!prompt.trim() || disabled}
-          className="absolute right-2 p-2.5 rounded-xl bg-gradient-to-r from-orbit-cyan to-orbit-violet text-slate-950 font-bold hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-md active:scale-95"
-          title="Launch autonomous goal"
-        >
-          <Send className="w-4 h-4 text-slate-950" />
-        </button>
+
+        <div className="absolute right-2 flex items-center gap-1.5">
+          {/* Voice Dictation Button */}
+          <button
+            type="button"
+            onClick={toggleSpeechRecognition}
+            disabled={disabled}
+            className={`p-2 rounded-xl transition-all ${
+              isListening
+                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/50 animate-pulse'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+            }`}
+            title={isListening ? 'Stop recording voice' : 'Dictate goal using voice'}
+          >
+            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+          </button>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={!prompt.trim() || disabled}
+            className="p-2.5 rounded-xl bg-gradient-to-r from-orbit-cyan to-orbit-violet text-slate-950 font-bold hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-md active:scale-95"
+            title="Launch autonomous goal"
+          >
+            <Send className="w-4 h-4 text-slate-950" />
+          </button>
+        </div>
       </form>
     </div>
   );

@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { nanoid } from 'nanoid';
-import { getDatabase } from '../db/database.js';
+import { getDatabase, searchMemoryFts } from '../db/database.js';
 import { globalReActEngine, pendingApprovalWaiters, AgentStepEvent } from '../agent/loop.js';
 import { createDefaultRegistry } from '../agent/tools/registry.js';
 import { createLlmProvider } from '../agent/llmAdapter.js';
@@ -13,8 +13,8 @@ export async function taskRoutes(fastify: FastifyInstance, options: FastifyPlugi
   const botSendMessage = options.botSendMessage;
 
   // POST /api/tasks - Launch an autonomous task
-  fastify.post<{ Body: { prompt: string; userId?: string } }>('/api/tasks', async (req, reply) => {
-    const { prompt, userId = 'pilot' } = req.body || {};
+  fastify.post<{ Body: { prompt: string; userId?: string; orbiter?: string } }>('/api/tasks', async (req, reply) => {
+    const { prompt, userId = 'pilot', orbiter = 'scout' } = req.body || {};
 
     if (!prompt || prompt.trim() === '') {
       return reply.status(400).send({ error: 'Prompt is required' });
@@ -25,9 +25,9 @@ export async function taskRoutes(fastify: FastifyInstance, options: FastifyPlugi
     const now = Date.now();
 
     db.prepare(`
-      INSERT INTO tasks (id, user_id, prompt, status, created_at, updated_at)
-      VALUES (?, ?, ?, 'pending', ?, ?)
-    `).run(taskId, userId, prompt.trim(), now, now);
+      INSERT INTO tasks (id, user_id, prompt, status, orbiter, created_at, updated_at)
+      VALUES (?, ?, ?, 'pending', ?, ?, ?)
+    `).run(taskId, userId, prompt.trim(), orbiter, now, now);
 
     // Launch ReAct engine in background
     globalReActEngine
@@ -35,6 +35,7 @@ export async function taskRoutes(fastify: FastifyInstance, options: FastifyPlugi
         taskId,
         userId,
         prompt: prompt.trim(),
+        orbiter,
         registry,
         llmProvider,
         botSendMessage,
@@ -47,6 +48,7 @@ export async function taskRoutes(fastify: FastifyInstance, options: FastifyPlugi
       taskId,
       status: 'pending',
       prompt: prompt.trim(),
+      orbiter,
       createdAt: now,
     });
   });
@@ -258,6 +260,67 @@ export async function taskRoutes(fastify: FastifyInstance, options: FastifyPlugi
 
     return reply.send({ memory });
   });
+
+  // GET /api/memory/search - FTS5 full-text search across agent memory
+  fastify.get<{ Querystring: { q?: string; userId?: string } }>('/api/memory/search', async (req, reply) => {
+    const query = (req.query.q || '').trim();
+    const userId = req.query.userId || 'pilot';
+
+    if (!query) {
+      return reply.send({ results: [], count: 0, query: '' });
+    }
+
+    const results = searchMemoryFts(userId, query);
+    return reply.send({ results, count: results.length, query });
+  });
+
+  // POST /api/tasks/:id/replay - Re-run or branch an execution
+  fastify.post<{ Params: { id: string }; Body?: { prompt?: string; orbiter?: string; userId?: string } }>(
+    '/api/tasks/:id/replay',
+    async (req, reply) => {
+      const { id } = req.params;
+      const db = getDatabase();
+      const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as any;
+
+      if (!existing) {
+        return reply.status(404).send({ error: 'Task not found' });
+      }
+
+      const newTaskId = nanoid();
+      const prompt = (req.body?.prompt || existing.prompt).trim();
+      const orbiter = req.body?.orbiter || existing.orbiter || 'scout';
+      const userId = req.body?.userId || existing.user_id || 'pilot';
+      const now = Date.now();
+
+      db.prepare(`
+        INSERT INTO tasks (id, user_id, prompt, status, orbiter, created_at, updated_at)
+        VALUES (?, ?, ?, 'pending', ?, ?, ?)
+      `).run(newTaskId, userId, prompt, orbiter, now, now);
+
+      globalReActEngine
+        .runTask({
+          taskId: newTaskId,
+          userId,
+          prompt,
+          orbiter,
+          registry,
+          llmProvider,
+          botSendMessage,
+        })
+        .catch((err) => {
+          console.error(`Task ${newTaskId} replay error:`, err);
+        });
+
+      return reply.status(201).send({
+        taskId: newTaskId,
+        originalTaskId: id,
+        status: 'pending',
+        prompt,
+        orbiter,
+        createdAt: now,
+      });
+    }
+  );
 
   // DELETE /api/memory/:key - Delete a memory item
   fastify.delete<{ Params: { key: string }; Querystring: { userId?: string } }>(

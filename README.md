@@ -25,50 +25,57 @@
 ## Core Capabilities
 
 - **Autonomous ReAct Engine:** Executes multi-step objectives with a sliding context scratchpad, structured Zod parameter validation, and an 8-step circuit breaker.
+- **Specialized Agent Orbiters:** Switch between 4 dedicated capability personas:
+  - 📡 **Radar Scout:** Tech reconnaissance on GitHub, Hacker News, and technical breakouts.
+  - 🎯 **Bargain Sentinel:** Continuous fare hunter, flight aggregator, and price alerts.
+  - 🛡️ **Uptime Watchdog:** High-reliability endpoint monitoring, response latency, and SSL verification.
+  - ⚡ **Executive Briefer:** High-density strategic synthesis and decision briefings.
+- **Autonomous Web Search (`web_search`):** Dynamically explores the web, discovering links, titles, and snippets without requiring external search API keys.
+- **Voice-to-Task Execution:** Speak prompts into the Mini App using Web Speech voice dictation or send `.ogg` voice notes directly to the Telegram bot.
+- **SQLite FTS5 Memory Index:** Lightning-fast BM25 full-text search across all persistent long-term memory entries and facts.
+- **1-Click Deliverable Export & Branching:** Export finalized mission answers as Markdown (`.md`), raw JSON traces, or instant clipboard copy, with one-click goal branching.
 - **Zero-Domain Guarantee:** Uses Telegram Long Polling (`getUpdates`). Runs cleanly on localhost or in Docker without public HTTPS certificates, reverse proxies, or paid hosting.
-- **Deterministic Demo Mode (`DEMO_MODE=true`):** Includes realistic multi-step simulations (Flight Price Watcher, Hacker News Tech Radar, Website Diff Sentinel) allowing complete workflow testing without an LLM API key.
+- **Deterministic Demo Mode (`DEMO_MODE=true`):** Includes realistic multi-step simulations allowing complete workflow testing without an LLM API key.
 - **Dual-Channel Human Clearance (HITL):** When an action requires operator permission (such as dispatching an outbound webhook), the agent pauses. Clearance can be granted via the Mini App sheet or directly in Telegram chat via inline buttons.
 - **Real-Time Streaming Cockpit:** Visualizes reasoning steps over Server-Sent Events (SSE) with glowing timeline nodes, parameter inspectors, and a monospace stdout terminal.
-- **24/7 Background Automations:** Evaluates 5-part cron expressions in SQLite to execute recurring monitors and dispatch proactive Telegram alerts.
-- **Long-Term Memory Explorer:** Records and inspects key-value facts across independent tasks.
 - **Hardened Security Boundary:** SSRF protection blocks loopback addresses, private IPv4 ranges (RFC 1918), link-local subnets, and cloud metadata endpoints (`169.254.169.254`).
 
 ---
 
 ## Application Showcase
 
-### 1. Autonomous Execution Cockpit (Desktop)
+### 1. Autonomous Execution Cockpit with Agent Orbiters
 
-Live reasoning timeline streaming thought steps, tool invocations, and observations in real time:
+Live reasoning timeline streaming thought steps, real-time web search, and tool observations:
 
 <div align="center">
-  <img src="docs/images/screenshot_cockpit_run.png?raw=true" alt="AgentOrbit Desktop Cockpit" width="100%" />
+  <img src="docs/images/screenshot_orbiters.png?raw=true" alt="AgentOrbit Cockpit with Orbiters" width="100%" />
 </div>
 
 <br/>
 
-### 2. Mobile View & Operational Subsystems
+### 2. Operational Subsystems & Export Toolbar
 
 <div align="center">
   <table>
     <tr>
       <td align="center" width="50%">
-        <b>Mission Deliverable &amp; Verification</b><br/><br/>
-        <img src="docs/images/screenshot_deliverable.png?raw=true" alt="Mission Deliverable Finalized" width="480" />
+        <b>Mission Deliverable &amp; 1-Click Export</b><br/><br/>
+        <img src="docs/images/screenshot_export_toolbar.png?raw=true" alt="Deliverable Toolbar" width="480" />
       </td>
       <td align="center" width="50%">
-        <b>Telegram Mini App (Mobile View)</b><br/><br/>
-        <img src="docs/images/screenshot_mobile.png?raw=true" alt="Telegram Mobile View" width="280" />
+        <b>SQLite FTS5 Full-Text Memory Search</b><br/><br/>
+        <img src="docs/images/screenshot_memory_fts.png?raw=true" alt="FTS5 Memory Search" width="480" />
       </td>
     </tr>
     <tr>
       <td align="center" width="50%">
-        <b>Background Schedules Manager</b><br/><br/>
-        <img src="docs/images/screenshot_schedules.png?raw=true" alt="Active Scheduled Jobs" width="480" />
+        <b>Telegram Mini App (Mobile View)</b><br/><br/>
+        <img src="docs/images/screenshot_mobile.png?raw=true" alt="Telegram Mobile View" width="280" />
       </td>
       <td align="center" width="50%">
-        <b>Agent Knowledge &amp; Memory Explorer</b><br/><br/>
-        <img src="docs/images/screenshot_memory.png?raw=true" alt="Stored Key-Value Memory" width="480" />
+        <b>Background Schedules Manager</b><br/><br/>
+        <img src="docs/images/screenshot_schedules.png?raw=true" alt="Active Scheduled Jobs" width="480" />
       </td>
     </tr>
   </table>

@@ -24,11 +24,20 @@ export interface ReActExecutionOptions {
   taskId: string;
   userId: string;
   prompt: string;
+  orbiter?: string;
   registry: ToolRegistry;
   llmProvider: LlmProvider;
   botSendMessage?: (chatId: string | number, text: string) => Promise<void>;
   maxSteps?: number;
 }
+
+export const ORBITER_PERSONAS: Record<string, string> = {
+  scout: 'You are Radar Scout, a specialized tech, market, and intelligence reconnaissance agent. Prioritize finding breaking developer news, trending repositories, and technical breakthroughs. Provide source links and concrete technical findings.',
+  radar: 'You are Radar Scout, a specialized tech, market, and intelligence reconnaissance agent. Prioritize finding breaking developer news, trending repositories, and technical breakthroughs. Provide source links and concrete technical findings.',
+  bargain: 'You are Bargain Sentinel, an autonomous deal & price tracker. Prioritize finding lowest prices, calculating percentage discounts, comparing travel/product fares, and scheduling monitoring alerts.',
+  uptime: 'You are Uptime Watchdog, a high-reliability infrastructure and website monitor. Check server status, latency, HTTP codes, and alert on outages or content diffs.',
+  brief: 'You are Executive Briefer, a strategic executive synthesizer. Deliver tight, high-signal bullet-pointed briefings with key takeaways, risks, and next steps.',
+};
 
 // Global registry for tasks waiting for human approval
 export const pendingApprovalWaiters = new Map<string, (approved: boolean) => void>();
@@ -47,18 +56,22 @@ export class ReActEngine extends EventEmitter {
   }
 
   async runTask(options: ReActExecutionOptions): Promise<string> {
-    const { taskId, userId, prompt, registry, llmProvider, botSendMessage, maxSteps = 8 } = options;
+    const { taskId, userId, prompt, orbiter = 'scout', registry, llmProvider, botSendMessage, maxSteps = 8 } = options;
     const db = getDatabase();
     const contextWindow = new AgentContextWindow(maxSteps);
 
-    // Update task status to running
-    db.prepare(`UPDATE tasks SET status = 'running', updated_at = ? WHERE id = ?`).run(Date.now(), taskId);
+    // Update task status to running and record orbiter if set
+    db.prepare(`UPDATE tasks SET status = 'running', orbiter = ?, updated_at = ? WHERE id = ?`).run(
+      orbiter,
+      Date.now(),
+      taskId
+    );
 
     this.emitStep({
       taskId,
       stepNumber: 0,
       type: 'SYSTEM',
-      thought: `Agent initialized. Objective: "${prompt}"`,
+      thought: `Agent initialized with [${orbiter.toUpperCase()}] Orbiter. Objective: "${prompt}"`,
       timestamp: Date.now(),
     });
 
@@ -120,9 +133,9 @@ export class ReActEngine extends EventEmitter {
    * Invokes real tools where appropriate to truly persist data in SQLite.
    */
   private async runDemoMode(options: ReActExecutionOptions, context: AgentContext): Promise<string> {
-    const { taskId, prompt, registry } = options;
+    const { taskId, prompt, registry, orbiter = 'scout' } = options;
     const db = getDatabase();
-    const plan: MockStepPlan[] = getMockPlanForPrompt(prompt);
+    const plan: MockStepPlan[] = getMockPlanForPrompt(prompt, orbiter);
 
     let stepCounter = 1;
     let finalResult = 'Goal accomplished successfully.';
@@ -214,10 +227,12 @@ export class ReActEngine extends EventEmitter {
     contextWindow: AgentContextWindow,
     context: AgentContext
   ): Promise<string> {
-    const { taskId, prompt, registry, llmProvider, maxSteps = 8 } = options;
+    const { taskId, prompt, registry, llmProvider, orbiter = 'scout', maxSteps = 8 } = options;
     const db = getDatabase();
 
+    const persona = ORBITER_PERSONAS[orbiter] || ORBITER_PERSONAS.scout;
     const systemPrompt = `You are AgentOrbit, an autonomous action agent running inside Telegram.
+Active Orbiter Persona: ${persona}
 You have access to tools to accomplish user objectives.
 Use the following strict ReAct format:
 

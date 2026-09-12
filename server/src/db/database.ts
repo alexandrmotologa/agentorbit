@@ -8,6 +8,7 @@ export interface TaskRecord {
   prompt: string;
   status: 'pending' | 'running' | 'waiting_approval' | 'completed' | 'failed';
   result?: string | null;
+  orbiter?: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -85,6 +86,7 @@ export function getDatabase(dbPath?: string): DatabaseSync {
       prompt TEXT NOT NULL,
       status TEXT NOT NULL,
       result TEXT,
+      orbiter TEXT DEFAULT 'scout',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
@@ -140,10 +142,73 @@ export function getDatabase(dbPath?: string): DatabaseSync {
     );
 
     CREATE INDEX IF NOT EXISTS idx_approvals_task ON pending_approvals(task_id, status);
+
+    -- SQLite FTS5 Full-Text Search Table for agent memory
+    CREATE VIRTUAL TABLE IF NOT EXISTS agent_memory_fts USING fts5(
+      user_id UNINDEXED,
+      key,
+      value,
+      tokenize = 'unicode61'
+    );
+
+    -- Triggers to synchronize agent_memory and agent_memory_fts
+    CREATE TRIGGER IF NOT EXISTS trg_memory_insert AFTER INSERT ON agent_memory BEGIN
+      INSERT INTO agent_memory_fts (user_id, key, value) VALUES (new.user_id, new.key, new.value);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_memory_update AFTER UPDATE ON agent_memory BEGIN
+      DELETE FROM agent_memory_fts WHERE user_id = old.user_id AND key = old.key;
+      INSERT INTO agent_memory_fts (user_id, key, value) VALUES (new.user_id, new.key, new.value);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_memory_delete AFTER DELETE ON agent_memory BEGIN
+      DELETE FROM agent_memory_fts WHERE user_id = old.user_id AND key = old.key;
+    END;
   `);
+
+  // Safe migration for existing tasks table if created before orbiter column
+  try {
+    db.exec(`ALTER TABLE tasks ADD COLUMN orbiter TEXT DEFAULT 'scout';`);
+  } catch {}
+
+  // Backfill FTS index if table is empty but agent_memory has rows
+  try {
+    const ftsCount = (db.prepare('SELECT count(*) as count FROM agent_memory_fts').get() as any)?.count || 0;
+    if (ftsCount === 0) {
+      db.exec('INSERT INTO agent_memory_fts (user_id, key, value) SELECT user_id, key, value FROM agent_memory;');
+    }
+  } catch {}
 
   dbInstance = db;
   return db;
+}
+
+export function searchMemoryFts(userId: string, query: string): Array<{ key: string; value: string; rank?: number }> {
+  const db = getDatabase();
+  const cleanQuery = query.replace(/['"*]/g, '').trim();
+  if (!cleanQuery) return [];
+
+  const ftsQuery = cleanQuery
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((term) => `"${term}"*`)
+    .join(' OR ');
+
+  try {
+    const results = db
+      .prepare(
+        `SELECT key, value, rank FROM agent_memory_fts WHERE user_id = ? AND agent_memory_fts MATCH ? ORDER BY rank LIMIT 30`
+      )
+      .all(userId, ftsQuery) as any[];
+    return results;
+  } catch {
+    const likeQuery = `%${cleanQuery}%`;
+    return db
+      .prepare(
+        `SELECT key, value FROM agent_memory WHERE user_id = ? AND (key LIKE ? OR value LIKE ?) ORDER BY updated_at DESC LIMIT 30`
+      )
+      .all(userId, likeQuery, likeQuery) as any[];
+  }
 }
 
 export function closeDatabase(): void {

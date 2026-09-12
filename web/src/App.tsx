@@ -7,6 +7,7 @@ import { HumanApprovalModal } from './components/HumanApprovalModal';
 import { ActiveTasksList } from './components/ActiveTasksList';
 import { AgentMemoryViewer } from './components/AgentMemoryViewer';
 import { TaskPromptInput } from './components/TaskPromptInput';
+import { OrbiterSelector, OrbiterType } from './components/OrbiterSelector';
 import { Zap, Clock, Database, Terminal, Cpu, ShieldAlert, Sparkles, RefreshCw } from 'lucide-react';
 
 export function App() {
@@ -23,8 +24,13 @@ export function App() {
 
   const [activeTab, setActiveTab] = useState<'live' | 'schedules' | 'memory' | 'terminal'>('live');
   const [recentTasks, setRecentTasks] = useState<any[]>([]);
+  const [selectedOrbiter, setSelectedOrbiter] = useState<OrbiterType>('scout');
+  const [promptToEdit, setPromptToEdit] = useState<string>('');
 
   const { steps, status, pendingApproval, finalAnswer, submitApproval } = useAgentStream(currentTaskId);
+
+  // Currently viewed task record
+  const currentTask = recentTasks.find((t) => t.id === currentTaskId);
 
   // Fetch recent tasks on mount
   const fetchRecentTasks = async () => {
@@ -47,17 +53,19 @@ export function App() {
   }, [userId]);
 
   // Dispatch new autonomous task
-  const handleDispatch = async (prompt: string) => {
+  const handleDispatch = async (prompt: string, orbiterOverride?: OrbiterType) => {
     haptic('medium');
+    const orbiterToUse = orbiterOverride || selectedOrbiter;
     try {
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, userId }),
+        body: JSON.stringify({ prompt, userId, orbiter: orbiterToUse }),
       });
       if (res.ok) {
         const data = await res.json();
         setCurrentTaskId(data.taskId);
+        setPromptToEdit('');
         setActiveTab('live');
         fetchRecentTasks();
       }
@@ -65,6 +73,15 @@ export function App() {
       console.error('Dispatch failed:', e);
       haptic('error');
     }
+  };
+
+  const handleBranchTask = (prompt: string, orb?: string) => {
+    haptic('medium');
+    setPromptToEdit(prompt);
+    if (orb && ['scout', 'bargain', 'uptime', 'brief'].includes(orb)) {
+      setSelectedOrbiter(orb as OrbiterType);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleApprove = () => {
@@ -173,8 +190,22 @@ export function App() {
         {/* Tab 1: Live Run View */}
         {activeTab === 'live' && (
           <div className="space-y-4">
-            {/* Prompt Dispatcher */}
-            <TaskPromptInput onDispatch={handleDispatch} disabled={status === 'running'} />
+            {/* Active Orbiter Persona Selector */}
+            <OrbiterSelector
+              selected={selectedOrbiter}
+              onSelect={(orb) => {
+                haptic('light');
+                setSelectedOrbiter(orb);
+              }}
+            />
+
+            {/* Prompt Dispatcher with Voice Dictation & Tailored Blueprints */}
+            <TaskPromptInput
+              onDispatch={(prompt) => handleDispatch(prompt)}
+              disabled={status === 'running'}
+              orbiter={selectedOrbiter}
+              initialPrompt={promptToEdit}
+            />
 
             {/* Task Selector if multiple tasks exist */}
             {recentTasks.length > 1 && (
@@ -199,14 +230,17 @@ export function App() {
               </div>
             )}
 
-            {/* Thought Chain Execution Stepper */}
+            {/* Thought Chain Execution Stepper with 1-Click Export & Branching */}
             <ThoughtChain
               steps={steps}
               status={status}
               pendingApproval={pendingApproval}
               finalAnswer={finalAnswer}
+              taskPrompt={currentTask?.prompt || ''}
+              orbiter={currentTask?.orbiter || selectedOrbiter}
               onApprove={handleApprove}
               onDeny={handleDeny}
+              onBranch={handleBranchTask}
             />
           </div>
         )}

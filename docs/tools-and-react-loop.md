@@ -44,7 +44,15 @@ Fetches a public HTTP or HTTPS web page, strips non-content tags (scripts, style
   - Non-HTTP protocols (`file:`, `ftp:`, `gopher:`) are rejected.
   - Timeout: 7-second abort controller.
 
-### 2. `schedule_cron`
+### 2. `web_search`
+Searches the web for keywords using DuckDuckGo / public sources, extracting ranked titles, links, and snippets without requiring external API keys.
+
+- **Parameters Schema:**
+  - `query` (string, required, min 2 chars): Search keywords or query.
+  - `max_results` (number, optional, default: 5): Maximum items returned (1 to 10).
+- **Safety:** Outgoing result URLs are validated by the SSRF guard before presentation to the agent.
+
+### 3. `schedule_cron`
 Registers a background autonomous job that triggers periodically in SQLite.
 
 - **Parameters Schema:**
@@ -52,29 +60,40 @@ Registers a background autonomous job that triggers periodically in SQLite.
   - `cron_expression` (string, required): 5-part cron syntax (e.g., `0 */4 * * *` or `30 8 * * *`).
   - `prompt` (string, required): Objective to execute on each trigger.
 
-### 3. `store_memory`
-Saves key-value knowledge into SQLite scoped to the user ID.
+### 4. `store_memory`
+Saves key-value knowledge into SQLite and automatically synchronizes the `agent_memory_fts` FTS5 virtual table for full-text search.
 
 - **Parameters Schema:**
   - `key` (string, required): Unique identifier (e.g., `last_flight_price`).
   - `value` (string, required): Content or observation to remember.
 
-### 4. `retrieve_memory`
+### 5. `retrieve_memory`
 Queries stored facts from SQLite.
 
 - **Parameters Schema:**
   - `key` (string, optional): Specific key to look up. If omitted, returns all user memory entries.
 
-### 5. `telegram_alert`
+### 6. `telegram_alert`
 Sends an immediate notification to the operator chat.
 
 - **Parameters Schema:**
   - `message` (string, required): Content to deliver to user.
 
-### 6. `http_post`
+### 7. `http_post`
 Sends an outbound HTTP POST webhook with a JSON payload.
 
 - **Flags:** `requiresApproval: true` (Triggers human-in-the-loop pause before execution).
+
+---
+
+## Specialized Agent Orbiters
+
+AgentOrbit supports 4 specialized persona modes that tune the system prompt and tool bias:
+
+1. 📡 **Radar Scout (`scout` / `radar`)**: Prioritizes breaking developer discussions, GitHub trending repositories, and Hacker News milestones.
+2. 🎯 **Bargain Sentinel (`bargain`)**: Focuses on fare aggregators, calculating discounts, and scheduling recurring threshold checks.
+3. 🛡️ **Uptime Watchdog (`uptime`)**: Prioritizes server status, ping latency, SSL validity, and header inspections.
+4. ⚡ **Executive Briefer (`brief`)**: Synthesizes multi-source data into concise executive digests with concrete takeaways.
 
 ---
 

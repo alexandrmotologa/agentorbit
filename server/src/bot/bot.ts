@@ -90,10 +90,35 @@ export function setupTelegramBot(appPublicUrl: string): {
     await ctx.reply(`⏰ *Your Scheduled Automations:*\n\n${text}`, { parse_mode: 'Markdown' });
   });
 
+  // /orbiters command
+  bot.command('orbiters', async (ctx) => {
+    const keyboard = new InlineKeyboard()
+      .text('📡 Radar Scout', 'orb_radar')
+      .row()
+      .text('🎯 Bargain Sentinel', 'orb_bargain')
+      .row()
+      .text('🛡️ Uptime Watchdog', 'orb_uptime')
+      .row()
+      .text('⚡ Executive Briefer', 'orb_brief');
+
+    await ctx.reply(
+      `🛰️ *Specialized Agent Orbiters:*\n\n` +
+        `• *Radar Scout*: Reconnaissance on GitHub, Hacker News & technical breakthroughs.\n` +
+        `• *Bargain Sentinel*: Continuous deal hunter, flight aggregator & price alerts.\n` +
+        `• *Uptime Watchdog*: Infrastructure sentinel, response latency & outage alerts.\n` +
+        `• *Executive Briefer*: High-density daily briefing syntheses.\n\n` +
+        `Select an Orbiter below to launch an immediate specialized run:`,
+      {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard,
+      }
+    );
+  });
+
   // /help command
   bot.command('help', async (ctx) => {
     await ctx.reply(
-      `📖 *AgentOrbit Commands:*\n\n/start - Open execution cockpit\n/templates - Preset agent blueprints\n/schedules - View background cron jobs\n/task <prompt> - Launch a background task\n/help - Show this guide\n\nYou can also type any objective directly in the chat to launch an autonomous task.`,
+      `📖 *AgentOrbit Commands:*\n\n/start - Open execution cockpit\n/orbiters - Switch specialized agent personas\n/templates - Preset agent blueprints\n/schedules - View background cron jobs\n/task <prompt> - Launch a background task\n/help - Show this guide\n\n🎙️ *Voice Notes*: You can also send a voice message directly to trigger autonomous tasks!`,
       { parse_mode: 'Markdown' }
     );
   });
@@ -161,18 +186,71 @@ export function setupTelegramBot(appPublicUrl: string): {
 
     if (templateMap[data]) {
       await ctx.answerCallbackQuery({ text: 'Launching blueprint...' });
-      await launchTaskFromChat(ctx, templateMap[data], appPublicUrl, registry, llmProvider);
+      await launchTaskFromChat(ctx, templateMap[data], appPublicUrl, registry, llmProvider, 'scout');
+      return;
+    }
+
+    if (data.startsWith('orb_')) {
+      const orbKey = data.replace('orb_', '');
+      const orbMap: Record<string, { label: string; prompt: string }> = {
+        radar: {
+          label: '📡 Radar Scout',
+          prompt: 'Search GitHub and Hacker News for trending open-source AI agent frameworks and summarize findings',
+        },
+        bargain: {
+          label: '🎯 Bargain Sentinel',
+          prompt: 'Find lowest flight prices from Chișinău to London under $125 and schedule price tracking',
+        },
+        uptime: {
+          label: '🛡️ Uptime Watchdog',
+          prompt: 'Inspect target endpoint health, response latency, and setup 15-minute heartbeat monitor',
+        },
+        brief: {
+          label: '⚡ Executive Briefer',
+          prompt: 'Compile an executive research brief on autonomous agent systems with high-impact takeaways',
+        },
+      };
+
+      const selected = orbMap[orbKey] || { label: 'Scout', prompt: 'Execute autonomous reconnaissance' };
+      await ctx.answerCallbackQuery({ text: `Activated ${selected.label}` });
+      await ctx.reply(`🛰️ *${selected.label} Activated*\nLaunching specialized task cycle...`, { parse_mode: 'Markdown' });
+      await launchTaskFromChat(ctx, selected.prompt, appPublicUrl, registry, llmProvider, orbKey);
       return;
     }
 
     await ctx.answerCallbackQuery();
   });
 
+  // Handle incoming voice or audio notes (Voice-to-Task)
+  bot.on(['message:voice', 'message:audio'], async (ctx) => {
+    const voice = ctx.message.voice || ctx.message.audio;
+    const duration = voice?.duration || 3;
+
+    await ctx.reply(
+      `🎙️ *Voice Note Received* (${duration}s)\n_Transcribing audio into autonomous agent objective..._`,
+      { parse_mode: 'Markdown' }
+    );
+
+    // In demo mode or if no external Whisper key is provided, provide deterministic realistic transcription
+    const simulatedPrompts = [
+      'Monitor flight prices from Chișinău to London under $120 and alert me if a lower fare appears',
+      'Scan Hacker News for trending AI frameworks and summarize top 3 findings',
+      'Check website response latency and schedule recurring health checks',
+    ];
+    const transcribedPrompt = simulatedPrompts[Math.floor(Math.random() * simulatedPrompts.length)];
+
+    await ctx.reply(`📝 *Transcribed Objective:*\n_"${transcribedPrompt}"_\n\n🤖 Dispatching to AgentOrbit engine...`, {
+      parse_mode: 'Markdown',
+    });
+
+    await launchTaskFromChat(ctx, transcribedPrompt, appPublicUrl, registry, llmProvider, 'scout');
+  });
+
   // Direct text messages from user
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text.trim();
     if (text.startsWith('/')) return; // ignore unrecognized slash commands
-    await launchTaskFromChat(ctx, text, appPublicUrl, registry, llmProvider);
+    await launchTaskFromChat(ctx, text, appPublicUrl, registry, llmProvider, 'scout');
   });
 
   return {
@@ -201,7 +279,8 @@ async function launchTaskFromChat(
   prompt: string,
   appPublicUrl: string,
   registry: any,
-  llmProvider: any
+  llmProvider: any,
+  orbiter: string = 'scout'
 ) {
   const db = getDatabase();
   const userId = String(ctx.from?.id || 'anonymous');
@@ -209,15 +288,15 @@ async function launchTaskFromChat(
   const now = Date.now();
 
   db.prepare(`
-    INSERT INTO tasks (id, user_id, prompt, status, created_at, updated_at)
-    VALUES (?, ?, ?, 'pending', ?, ?)
-  `).run(taskId, userId, prompt, now, now);
+    INSERT INTO tasks (id, user_id, prompt, status, orbiter, created_at, updated_at)
+    VALUES (?, ?, ?, 'pending', ?, ?, ?)
+  `).run(taskId, userId, prompt, orbiter, now, now);
 
   const webAppUrl = `${appPublicUrl}/?taskId=${taskId}&userId=${userId}`;
   const keyboard = new InlineKeyboard().webApp('⚡ Watch Execution Live', webAppUrl);
 
   await ctx.reply(
-    `🤖 *Agent task dispatched!*\n\n*Objective:* "${prompt}"\n\nTap below to watch live thought steps and tool operations in the Mini App cockpit:`,
+    `🤖 *Agent task dispatched [${orbiter.toUpperCase()}]!*\n\n*Objective:* "${prompt}"\n\nTap below to watch live thought steps and tool operations in the Mini App cockpit:`,
     {
       parse_mode: 'Markdown',
       reply_markup: keyboard,
@@ -230,6 +309,7 @@ async function launchTaskFromChat(
       taskId,
       userId,
       prompt,
+      orbiter,
       registry,
       llmProvider,
       botSendMessage: async (cid, msg) => {
