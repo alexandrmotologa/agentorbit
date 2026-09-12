@@ -1,4 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+const fs = require('fs');
+const path = require('path');
+const { Resvg } = require('@resvg/resvg-js');
+
+function buildLogoSvg() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <defs>
     <clipPath id="squircle-clip">
       <rect x="24" y="24" width="976" height="976" rx="220" />
@@ -170,4 +175,32 @@
 
     </g>
   </g>
-</svg>
+</svg>`;
+}
+
+function run() {
+  const svg = buildLogoSvg();
+  const docsDir = path.join(__dirname, '..', 'docs', 'images');
+  if (!fs.existsSync(docsDir)) {
+    fs.mkdirSync(docsDir, { recursive: true });
+  }
+
+  const svgPath = path.join(docsDir, 'logo.svg');
+  const pngPath = path.join(docsDir, 'logo.png');
+
+  fs.writeFileSync(svgPath, svg, 'utf8');
+  console.log(`Saved SVG to: ${svgPath}`);
+
+  const resvg = new Resvg(svg, {
+    fitTo: { mode: 'width', value: 2048 },
+  });
+  const pngData = resvg.render().asPng();
+  fs.writeFileSync(pngPath, pngData);
+  console.log(`Rendered PNG to: ${pngPath} (2048x2048)`);
+
+  const artifactPng = 'C:\\Users\\alexander\\.gemini\\antigravity-ide\\brain\\44e104b9-9e10-4208-a6a7-3ca7a8deb873\\logo.png';
+  fs.writeFileSync(artifactPng, pngData);
+  console.log(`Copied PNG to brain artifact: ${artifactPng}`);
+}
+
+run();

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/logo.png?raw=true" alt="AgentOrbit Celestial Satellite Logo" width="180" />
+  <img src="docs/images/logo.png?raw=true" alt="AgentOrbit Peregrine Falcon Mascot Logo" width="140" style="border-radius: 28px;" />
 </p>
 
 <h1 align="center">AgentOrbit</h1>
@@ -19,6 +19,12 @@
 <p align="center">
   AgentOrbit moves beyond simple single-turn chatbots into autonomous action agents. It accepts high-level objectives, runs a ReAct (Reason + Action) loop across sandboxed tools, pauses for human clearance on sensitive operations, and streams live thought chains directly to a Telegram Mini App cockpit.
 </p>
+
+<div align="center">
+  <a href="#application-showcase">
+    <img src="docs/images/demo.gif?raw=true" alt="AgentOrbit Autonomous Execution Cockpit Live Demo" width="860" style="border-radius: 14px; border: 1px solid #334155; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);" />
+  </a>
+</div>
 
 ---
 
@@ -76,6 +82,12 @@ Live reasoning timeline streaming thought steps, real-time web search, and tool 
       <td align="center" width="50%">
         <b>Background Schedules Manager</b><br/><br/>
         <img src="docs/images/screenshot_schedules.png?raw=true" alt="Active Scheduled Jobs" width="480" />
+      </td>
+    </tr>
+    <tr>
+      <td align="center" colspan="2">
+        <b>Live Diagnostic Terminal &amp; ReAct Trace Stream</b><br/><br/>
+        <img src="docs/images/screenshot_terminal.png?raw=true" alt="Live Diagnostic Terminal" width="800" />
       </td>
     </tr>
   </table>
