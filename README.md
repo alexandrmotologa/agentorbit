@@ -21,7 +21,7 @@
 </p>
 
 <div align="center">
-  <a href="#application-showcase">
+  <a href="#application-overview">
     <img src="docs/images/demo.gif?raw=true" alt="AgentOrbit Autonomous Execution Cockpit Live Demo" width="860" style="border-radius: 14px; border: 1px solid #334155; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);" />
   </a>
 </div>
@@ -48,7 +48,7 @@
 
 ---
 
-## Application Showcase
+## Application Overview
 
 ### 1. Autonomous Execution Cockpit with Agent Orbiters
 
@@ -233,6 +233,10 @@ Tests verify:
 - [Telegram Bot & Mini App Guide](docs/bot-guide.md)
 
 ---
+
+## Contributing
+
+Please review [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines, project setup, and PR conventions.
 
 ## License
 
